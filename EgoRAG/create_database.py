@@ -3,6 +3,7 @@ import os
 
 from egorag.agents.RagAgent import RagAgent
 from egorag.database.Chroma import Chroma
+from egorag.utils.gen_event import gen_event
 
 
 # Set Args
@@ -14,6 +15,7 @@ def parse_args():
     parser.add_argument(
         "--json_path", required=True, help="Path to the JSON file for database creation"
     )
+    parser.add_argument("--diary_dir", required=False,default="events_diary", help="Path to the diary directory")
     return parser.parse_args()
 
 
@@ -31,6 +33,7 @@ def main():
     # Create the database from the provided JSON file
     agent.create_database_from_json(args.json_path)
 
+    gen_event(args.db_name, args.diary_dir)
     # Optional: View the content of the database (first 10 entries)
     agent.database_t.view_database(n=10)  # View the first 10 entries
 

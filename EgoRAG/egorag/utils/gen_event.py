@@ -9,92 +9,7 @@ from azure.ai.inference.models import SystemMessage, UserMessage
 from azure.core.credentials import AzureKeyCredential
 from azure.core.pipeline.transport import RequestsTransport
 from egorag.database.Chroma import Chroma
-
-
-def gpt_inference(prompt, system_messages):
-    # Configuration
-    # Configuration
-    GPT4V_KEY = os.getenv("GPT4V_KEY")
-    GPT4V_ENDPOINT = os.getenv("GPT4V_ENDPOINT")
-
-    if GPT4V_KEY is None or GPT4V_ENDPOINT is None:
-        raise ValueError("GPT4V_KEY Or GPT4V_ENDPOINT IS NOT SETTING")
-
-    headers = {
-        "Content-Type": "application/json",
-        "api-key": GPT4V_KEY,
-    }
-
-    payload = {
-        "messages": [
-            {"role": "system", "content": [{"type": "text", "text": system_messages}]},
-            {
-                "role": "user",
-                "content": [{"type": "text", "text": prompt}],
-            },
-        ],
-        "temperature": 0.7,
-        "top_p": 0.95,
-        "max_tokens": 2048,
-    }
-
-    max_retries = 5
-    retry_count = 0
-
-    while retry_count < max_retries:
-        try:
-            response = requests.post(
-                GPT4V_ENDPOINT, headers=headers, json=payload, timeout=180
-            )
-            response.raise_for_status()
-            return response.json()["choices"][0]["message"]["content"]
-        except requests.RequestException as e:
-            retry_count += 1
-            print(f"Failed attempt {retry_count} of {max_retries}. Error: {e}")
-            if retry_count == max_retries:
-                print("Max retries reached. Giving up.")
-                return None
-
-
-def ds_inference(prompt, system_messages):
-    endpoint = os.getenv("AZURE_INFERENCE_SDK_ENDPOINT")
-    model_name = os.getenv("DEPLOYMENT_NAME", "DeepSeek-R1")
-    key = os.getenv("AZURE_INFERENCE_SDK_KEY")
-    client = ChatCompletionsClient(
-        endpoint=endpoint,
-        credential=AzureKeyCredential(key),
-        transport=RequestsTransport(read_timeout=500),
-    )
-
-    max_retries = 3
-    retry_count = 0
-
-    while retry_count < max_retries:
-        try:
-            # save system_messages and prompt to file
-            with open("system_messages.txt", "w") as f:
-                f.write(system_messages)
-            with open("prompt.txt", "w") as f:
-                f.write(prompt)
-
-            response = client.complete(
-                messages=[
-                    SystemMessage(content=system_messages),
-                    UserMessage(content=prompt),
-                ],
-                model=model_name,
-                max_tokens=2048,
-            )
-            # client.complete(messages=[SystemMessage(content=system_messages),UserMessage(content=prompt)],model=model_name,max_tokens=2048)['choices'][0]['message']['content']
-            full_response = response["choices"][0]["message"]["content"]
-            response = full_response.split("</think>")[1]
-            return response
-        except Exception as e:
-            retry_count += 1
-            print(f"Error on attempt {retry_count}: {e}")
-            if retry_count == max_retries:
-                print("Max retries reached. Giving up.")
-                return
+from egorag.utils.util import call_gpt4,call_deepseek
 
 
 system_message_min = f"""As an **Event Summary Documentation Specialist**, your role is to systematically structure and summarize event information, ensuring that all key actions of major characters are captured while maintaining clear event logic and completeness. Your focus is on concise and factual summarization rather than detailed transcription.
@@ -215,18 +130,19 @@ def process_day(docs, date):
                 context = []
                 for item in batch:
                     context.append(item["Content"])
-                print(f"Processing Day{date} {start_time} - minutes")
-                # ds_res = ds_inference(f'All descriptions: {context}', system_message_min)
-                print(f"context:{context}")
                 try:
-                    print(context)
-                    gpt_res = gpt_inference(
-                        f"All descriptions: {context}", system_message_min
+                    gpt_res = call_gpt4(
+                        prompt=f"All descriptions: {context}",
+                        system_message=system_message_min,
+                        max_tokens=2048,
+                        temperature=0.7,
+                        top_p=0.95
                     )
                 except Exception as e:
                     print(f"Error processing batch {window_index}: {e}")
-                    gpt_res = ds_inference(
-                        f"All descriptions: {context}", system_message_min
+                    gpt_res = call_deepseek(
+                        prompt=f"All descriptions: {context}",
+                        system_message=system_message_min
                     )
                 print(gpt_res)
                 if gpt_res:
@@ -257,9 +173,15 @@ def process_day(docs, date):
         context = []
         for item in batch:
             context.append(item["Content"])
-        # ds_res = ds_inference(f'All descriptions: {context}', system_message_min)
-        gpt_res = gpt_inference(f"All descriptions: {context}", system_message_min)
-        print(gpt_res)
+        
+        gpt_res = call_gpt4(
+            prompt=f"All descriptions: {context}",
+            system_message=system_message_min,
+            max_tokens=2048,
+            temperature=0.7,
+            top_p=0.95
+        )
+        
         if gpt_res:
             try:
                 res = gpt_res
@@ -282,7 +204,7 @@ def process_day(docs, date):
     return results
 
 
-def get_event_min(db_name):
+def get_event_min(db_name,diary_dir):
     output_dir = f"./{diary_dir}/{db_name}_l1"
     if os.path.exists(output_dir):
         print(
@@ -298,7 +220,6 @@ def get_event_min(db_name):
     for doc in docs:
         date = doc["Metadata"].get("date")
         docs_by_date[date].append(doc)
-    print(docs_by_date["DAY1"])
     for date in range(1, 8):
         output_file = f"./{diary_dir}/{db_name}_l1/l1_day{date}.json"
 
@@ -341,7 +262,7 @@ def get_event_min(db_name):
     ) as f:
         json.dump(merged_items, f, ensure_ascii=False, indent=4)
 
-    print("JSON 文件已成功合并")
+    print("JSON combined successfully")
 
 
 def process_json_batches(input_file, output_file, date):
@@ -350,7 +271,7 @@ def process_json_batches(input_file, output_file, date):
 
     results = []
     batch = []
-    current_batch_start_time = None
+    current_batch_start_time = 0
     batch_index = 1
 
     for item in data:
@@ -373,9 +294,9 @@ def process_json_batches(input_file, output_file, date):
                 batch.append(item)
             else:
                 context = "\n".join(item["generated_text"] for item in batch)
-                gpt_res = ds_inference(
-                    f"All descriptions: {context}. Strictly output below 500 words in total.",
-                    system_message_hour,
+                gpt_res = call_deepseek(
+                    prompt=f"All descriptions: {context}. Strictly output below 500 words in total.",
+                    system_message=system_message_hour,
                 )
                 if gpt_res:
                     try:
@@ -400,9 +321,9 @@ def process_json_batches(input_file, output_file, date):
 
     if batch:
         context = "\n".join(item["generated_text"] for item in batch)
-        gpt_res = ds_inference(
-            f"All descriptions: {context}. Strictly output below 500 words in total.",
-            system_message_hour,
+        gpt_res = call_deepseek(
+            prompt=f"All descriptions: {context}. Strictly output below 500 words in total.",
+            system_message=system_message_hour,
         )
         if gpt_res:
             try:
@@ -425,7 +346,7 @@ def process_json_batches(input_file, output_file, date):
         json.dump(results, f, indent=4)
 
 
-def get_event_hour(db_name):
+def get_event_hour(db_name,diary_dir):
     output_dir = f"./{diary_dir}/{db_name}_l2"
     if os.path.exists(output_dir):
         print(
@@ -479,10 +400,10 @@ def get_event_hour(db_name):
     ) as f:
         json.dump(merged_items, f, ensure_ascii=False, indent=4)
 
-    print("JSON 文件已成功合并")
+    print("JSON combined successfully")
 
 
-def get_event_day(db_name):
+def get_event_day(db_name,diary_dir):
     output_dir = f"./{diary_dir}/{db_name}_l3"
     if os.path.exists(output_dir):
         print(
@@ -510,10 +431,12 @@ def get_event_day(db_name):
                 day_data = json.load(f)
 
             context = "\n".join(item["generated_text"] for item in day_data)
-            # gpt_res = ds_inference(f'All descriptions: {context}. The output should be around 1500 words in total.', system_message_day)
-            gpt_res = gpt_inference(
-                f"All descriptions: {context}. The output should be around 1500 words in total.",
-                system_message_day,
+            gpt_res = call_gpt4(
+                prompt=f"All descriptions: {context}. The output should be around 1500 words in total.",
+                system_message=system_message_day,
+                max_tokens=2048,
+                temperature=0.7,
+                top_p=0.95
             )
             if gpt_res:
                 try:
@@ -554,23 +477,9 @@ def get_event_day(db_name):
 
 
 # main
-if __name__ == "__main__":
-    # Set up argument parser with a default value for diary_dir
-    parser = argparse.ArgumentParser(
-        description="Process events with specified database name and diary directory"
-    )
-    parser.add_argument("--db_name", type=str, help="Name of the database to process")
-    parser.add_argument(
-        "--diary_dir",
-        type=str,
-        default="events_diary",
-        help="Directory of the event diary (default: events_diary)",
-    )
-
-    # Parse command-line arguments
-    args = parser.parse_args()
+def gen_event(db_name, diary_dir):
 
     # Use the provided arguments in the functions
-    get_event_min(args.db_name, args.diary_dir)
-    get_event_hour(args.db_name, args.diary_dir)
-    get_event_day(args.db_name, args.diary_dir)
+    get_event_min(db_name, diary_dir)
+    get_event_hour(db_name, diary_dir)
+    get_event_day(db_name, diary_dir)

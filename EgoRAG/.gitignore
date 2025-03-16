@@ -164,6 +164,8 @@ cython_debug/
 data/
 models/
 checkpoints/
+scripts/
+chroma_db/
 
 *.pyc
 
@@ -171,3 +173,9 @@ data
 speech_projector
 settings
 *.txt
+
+answer_results/
+query_results/
+data/
+chroma_db/
+events_diary/

@@ -21,7 +21,7 @@ This will install the package in editable mode, allowing you to make changes to 
 
 ### Question Preparation
 
-To use the EgoRAG system, questions must be in the following format:
+To use the EgoRAG system, questions must be formatted in JSON with the following structure:
 
 ```json
 {
@@ -46,11 +46,43 @@ To use the EgoRAG system, questions must be in the following format:
         "time": "11152408"
     },
     "keywords": "use screwdriver",
-    "reason": "Saw Alice tightening screws with a screwdriver",
+    "reason": "Saw Alice tightening screws with a screwdriver"
 }
 ```
 
-The required fields are `query_time`, `question`, `choice`, and `keywords`.
+The required fields are: `query_time`, `question`, `choice_[a-d]`, and `keywords`.
+
+### API Key Setup
+
+Before running the pipeline, you need to set up API keys and endpoints for GPT and DeepSeek services. Configure the following environment variables:
+
+1. For DeepSeek services:
+
+Using Azure:
+```bash
+export AZURE_DEEPSEEK_KEY="your_deepseek_api_key"
+export AZURE_DEEPSEEK_ENDPOINT="your_deepseek_endpoint"
+export DEPLOYMENT_NAME="DeepSeek-R1"  # Optional
+```
+
+Using Official API:
+```bash
+export DEEPSEEK_API_KEY="your_deepseek_api_key"
+export DEPLOYMENT_NAME="DeepSeek-R1"  # Optional
+```
+
+2. For GPT services:
+
+Using Azure:
+```bash
+export AZURE_API_KEY="your_gpt_api_key"
+export AZURE_API_ENDPOINT="your_gpt_endpoint"
+```
+
+Using OpenAI:
+```bash
+export OPENAI_API_KEY="your_gpt_api_key"
+```
 
 ### Creating the Database
 
@@ -84,62 +116,51 @@ In this method, the model will go through all the videos, extract captions, and 
 
 ```bash
 python3 main.py \
-    --name "NAME"\
-    --db_name "DB_NAME"\     
-    --stage create  \   
-    --video_dir "video_base_dir" \    
+    --name "NAME" \
+    --db_name "DB_NAME" \
+    --stage create \
+    --video_dir "video_base_dir" \
     --config "config/your_model_config.yaml"
 ```
 
 ### Querying the Database
 
-To improve query performance, an event summary must be generated for each database. Use the following command to generate the event summary:
+To query the database, use:
 
 ```bash
-python3 gen_event.py --db_name <DB_NAME> --diary_dir "folder/to/save/diary"
-```
-
-Then, run:
-
-```bash
-python3 main.py  \   
-    --name "NAME" \    
-    --db_name "DB_NAME" \    
-    --stage create  \   
-    --video_dir "video_base_dir"\     
-    --config "config/your_model_config.yaml"\     
-    --query_json "path/to/your/query.json" \    
-    --diary_dir "folder/to/save/diary"\     
-    --query_result "folder/to/save/result"\
+python3 main.py \
+    --name "NAME" \
+    --db_name "DB_NAME" \
+    --stage query \
+    --video_dir "video_base_dir" \
+    --config "config/your_model_config.yaml" \
+    --query_json "path/to/your/query.json"
 ```
 
 ### Answering Queries
 
-To answer specific query results, use the following command:
+To process specific query results, use:
 
 ```bash
-python3 main.py\     
-    --name "NAME"\     
-    --db_name "DB_NAME"\     
-    --stage answer \    
-    --video_dir "video_base_dir"\     
-    --config "config/your_model_config.yaml" \    
-    --query_json "path/to/your/query.json"\     
-    --query_result_json "path/to/query/result.json"\     
-    --answer_result "folder/to/answer/result"\
+python3 main.py \
+    --name "NAME" \
+    --db_name "DB_NAME" \
+    --stage answer \
+    --video_dir "video_base_dir" \
+    --config "config/your_model_config.yaml" \
+    --query_json "path/to/your/query.json" \
+    --query_result_json "path/to/query/result.json"
 ```
 
-Alternatively, you can automatically answer after querying with the following command:
+Alternatively, you can combine querying and answering in one command:
 
 ```bash
-python3 main.py \    
-    --name "NAME"\     
-    --db_name "DB_NAME"\     
-    --stage query_answer\     
-    --video_dir "video_base_dir" \    
-    --config "config/your_model_config.yaml"\     
-    --query_json "path/to/your/query.json"\     
-    --query_result "folder/to/save/result"\     
-    --answer_result "folder/to/answer/result"\
+python3 main.py \
+    --name "NAME" \
+    --db_name "DB_NAME" \
+    --stage query answer \
+    --video_dir "video_base_dir" \
+    --config "config/your_model_config.yaml" \
+    --query_json "path/to/your/query.json"
 ```
 

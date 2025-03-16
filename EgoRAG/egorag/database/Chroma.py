@@ -1,7 +1,7 @@
 import os
 import time
 from abc import ABC, abstractmethod
-from typing import Any, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, TypedDict, Union
 
 import numpy as np
 import torch
@@ -16,8 +16,24 @@ except ImportError:
     )
 
 
+class ChromaError(Exception):
+    """Base exception for Chroma related errors."""
+    pass
+
+
+class DocumentNotFoundError(ChromaError):
+    """Raised when a document is not found in the collection."""
+    pass
+
+
+class MetadataDict(TypedDict, total=False):
+    date: str
+    start_time: str
+    end_time: str
+
+
 class Chroma(ABC):
-    def __init__(self, name="EgoRAG", method="text", db_dir="./chroma_db"):
+    def __init__(self, name: str = "EgoRAG", method: str = "text", db_dir: str = "./chroma_db"):
         self.name = name
         self.method = method
         self.db_dir = db_dir
@@ -50,47 +66,35 @@ class Chroma(ABC):
     def collection(self):
         return self._collection
 
-    def get_content_by_id(self, id: str) -> Optional[dict]:
+    def _generate_id_range(self, id: str, n: int) -> List[str]:
+        """Generate a range of IDs based on the given ID and range size."""
+        try:
+            parts = id.split("_")
+            base_id = "_".join(parts[:-1])
+            index = int(parts[-1])
+
+            start_index = max(0, index - n)
+            end_index = index + n
+
+            return [f"{base_id}_{i}" for i in range(start_index, end_index + 1)]
+        except (ValueError, IndexError) as e:
+            raise ChromaError(f"Invalid ID format: {e}")
+
+    def get_content_by_id(self, id: str) -> Optional[str]:
         try:
             result = self._collection.get(ids=[id])
-            if result and len(result["documents"]) > 0:
-                return result["documents"][0]  # Assuming result includes 'documents'
-            else:
-                print(f"No content found for ID: {id}")
-                return None
+            if result and result["documents"]:
+                return result["documents"][0]
+            raise DocumentNotFoundError(f"No content found for ID: {id}")
         except Exception as e:
-            print(f"Error retrieving content by ID: {e}")
-            return None
+            raise ChromaError(f"Error retrieving content by ID: {e}")
 
-    def get_caption(self, id: str, n_result=0):
-        def generate_id_range(id: str, n: int):
-            try:
-                # Parse the index part of the ID (e.g., DAY3_10000000_10003000_1 -> 1)
-                parts = id.split("_")
-                base_id = "_".join(
-                    parts[:-1]
-                )  # Extract the front part, get "DAY3_10000000_10003000"
-                index = int(parts[-1])  # Extract the last part, get the index
-
-                # Calculate the range of n sentences before and after, ensuring the minimum value is 0
-                start_index = max(0, index - n)
-                end_index = index + n
-
-                # Generate a list of IDs containing n sentences before and after
-                ids_range = [
-                    f"{base_id}_{i}" for i in range(start_index, end_index + 1)
-                ]
-
-                return ids_range
-            except Exception as e:
-                print(f"Error generating ID range: {e}")
-                return None
-
-        ids = generate_id_range(id=id, n=n_result)
-
+    def get_caption(self, id: str, n_result: int = 0) -> Optional[dict]:
         try:
+            ids = self._generate_id_range(id=id, n=n_result)
             result = self._collection.get(ids=ids)
-            if result and len(result["documents"]) > 0:
+            
+            if result and result["documents"]:
                 return {
                     "item": {
                         "ids": [id],
@@ -99,71 +103,59 @@ class Chroma(ABC):
                     },
                     "documents": result["documents"],
                 }
-            else:
-                print(f"No content found for ID: {id}")
-                return None
+            raise DocumentNotFoundError(f"No content found for ID: {id}")
+        except ChromaError:
+            raise
         except Exception as e:
-            print(f"Error retrieving content by ID: {e}")
-            return None
+            raise ChromaError(f"Error retrieving caption: {e}")
 
-    def view_database(self, n: int = None, show_embeddings: bool = False):
+    def view_database(self, n: Optional[int] = None, show_embeddings: bool = False) -> None:
         try:
             all_data = self._collection.get(
                 include=["embeddings", "documents", "metadatas"]
             )
-            print(f"Number of entries in the database: {len(all_data['ids'])}")
-            documents_to_view = (
-                all_data["documents"][:n] if n is not None else all_data["documents"]
-            )
+            total_entries = len(all_data["ids"])
+            print(f"Number of entries in the database: {total_entries}")
+            
+            documents_to_view = all_data["documents"][:n] if n is not None else all_data["documents"]
+            
             for idx, document in enumerate(documents_to_view):
-                metadata = (
-                    all_data["metadatas"][idx]
-                    if "metadatas" in all_data
-                    else "No metadata"
-                )
-                metadata_types = (
-                    {key: type(value).__name__ for key, value in metadata.items()}
-                    if metadata != "No metadata"
-                    else "No metadata"
-                )
+                metadata = all_data["metadatas"][idx] if "metadatas" in all_data else "No metadata"
+                metadata_types = {key: type(value).__name__ for key, value in metadata.items()} if metadata != "No metadata" else "No metadata"
+                
                 output = f"ID: {all_data['ids'][idx]}, Content: {document}, Metadata: {metadata}, Metadata Types: {metadata_types}"
                 if show_embeddings and "embeddings" in all_data:
                     output += f", Embedding shape: {len(all_data['embeddings'][idx])}"
                 print(output)
         except Exception as e:
-            print(f"Error retrieving the whole dataset: {e}")
+            raise ChromaError(f"Error viewing database: {e}")
 
-    def get_doc(self, n: int = None):
+    def get_doc(self, n: Optional[int] = None) -> List[Dict[str, Union[str, MetadataDict]]]:
         all_docs = []
-
-        all_data = self._collection.get()
-        print(f"Number of entries in the database: {len(all_data['ids'])}")
-        documents_to_view = (
-            all_data["documents"][:n] if n is not None else all_data["documents"]
-        )
-
-        for idx, document in enumerate(documents_to_view):
-            try:
-                metadata = (
-                    all_data["metadatas"][idx]
-                    if "metadatas" in all_data
-                    else "No metadata"
-                )
-                metadata_filtered = {
-                    key: metadata[key] for key in ["date", "end_time", "start_time"]
+        try:
+            all_data = self._collection.get()
+            print(f"Number of entries in the database: {len(all_data['ids'])}")
+            
+            documents_to_view = all_data["documents"][:n] if n is not None else all_data["documents"]
+            
+            for idx, document in enumerate(documents_to_view):
+                metadata = all_data["metadatas"][idx] if "metadatas" in all_data else {}
+                metadata_filtered: MetadataDict = {
+                    key: metadata.get(key, "") 
+                    for key in ["date", "end_time", "start_time"]
+                    if key in metadata
                 }
                 all_docs.append({"Content": document, "Metadata": metadata_filtered})
-            except Exception as e:
-                print(f"Error processing entry {idx}: {e}")
-                continue
-
-        return all_docs
+                
+            return all_docs
+        except Exception as e:
+            raise ChromaError(f"Error getting documents: {e}")
 
     def custom_query(
         self,
         query_texts: List[str],
         n_results: int = 3,
-        where: dict = None,
+        where: Optional[Dict] = None,
         filter_first: bool = True,
     ) -> dict:
         """
@@ -175,34 +167,21 @@ class Chroma(ABC):
                     query_texts=query_texts, n_results=n_results, where=where
                 )
 
-            # 1. Get filtered data (explicitly include embeddings)
             filtered_data = self._collection.get(
                 where=where,
-                include=[
-                    "embeddings",
-                    "documents",
-                    "metadatas",
-                ],  # Explicitly include embeddings
+                include=["embeddings", "documents", "metadatas"],
             )
 
             if not filtered_data["ids"]:
                 return {"ids": [], "documents": [], "metadatas": [], "distances": []}
 
-            # 2. Get embedding vectors for query texts
             query_embeddings = self.embedding_function(query_texts)
+            filtered_embeddings = (
+                np.array([self.embedding_function([doc])[0] for doc in filtered_data["documents"]])
+                if filtered_data["embeddings"] is None
+                else np.array(filtered_data["embeddings"])
+            )
 
-            # 3. Get embedding vectors for filtered data
-            if filtered_data["embeddings"] is None:
-                filtered_embeddings = np.array(
-                    [
-                        self.embedding_function([doc])[0]
-                        for doc in filtered_data["documents"]
-                    ]
-                )
-            else:
-                filtered_embeddings = np.array(filtered_data["embeddings"])
-
-            # 4. Calculate similarity and get results
             similarities = np.dot(query_embeddings, filtered_embeddings.T) / (
                 np.linalg.norm(query_embeddings, axis=1)[:, np.newaxis]
                 * np.linalg.norm(filtered_embeddings, axis=1)
@@ -211,18 +190,15 @@ class Chroma(ABC):
             n_results = min(n_results, len(filtered_data["ids"]))
             top_indices = np.argsort(similarities[0])[-n_results:][::-1]
 
-            results = {
+            return {
                 "ids": [filtered_data["ids"][i] for i in top_indices],
                 "documents": [filtered_data["documents"][i] for i in top_indices],
                 "metadatas": [filtered_data["metadatas"][i] for i in top_indices],
                 "distances": [1 - similarities[0][i] for i in top_indices],
             }
 
-            return results
-
         except Exception as e:
-            print(f"Error in custom query: {e}")
-            return {"ids": [], "documents": [], "metadatas": [], "distances": []}
+            raise ChromaError(f"Error in custom query: {e}")
 
     def clean_database(self):
         """
