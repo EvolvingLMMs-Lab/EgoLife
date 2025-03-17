@@ -2,12 +2,11 @@
 rag:
   data_type: "clip"       # Type of data processing (e.g., 'clip', 'raw')
 
-video:
+caption:
   fps: 1
-  max_frames_num: 32
 
 model:
   name: "EgoGPT"
   params:
-    pretrained: "/mnt/sfs-common/jkyang/EgoGPT/checkpoints/egogpt_IT_12k_1127"
+    pretrained: "lmms-lab/EgoGPT-7b-EgoIT-EgoLife"
 

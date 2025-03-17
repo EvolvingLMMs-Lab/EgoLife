@@ -1,5 +1,6 @@
 import re
 from egorag.utils.util import call_gpt4
+from collections import defaultdict
 def get_ids(question, results):
     system_prompt = """
     You are an AI assistant tasked with helping to process and analyze search results for specific questions. 

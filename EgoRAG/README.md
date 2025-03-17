@@ -17,12 +17,30 @@ pip install -e .
 
 This will install the package in editable mode, allowing you to make changes to the code without needing to reinstall it.
 
-## Usage
 
-### Question Preparation
+### Downloading the Dataset
 
-To use the EgoRAG system, questions must be formatted in JSON with the following structure:
+#### Video Files
+1. Access the video files at: https://huggingface.co/datasets/lmms-lab/EgoLife/tree/main
+2. Download and organize the videos in the following structure:
+   ```
+   path/to/EgoLife/
+   └── train/
+       ├── A1_JAKE/
+       ├── A2_ALICE/
+       ├── A3_TASHA/
+       └── ...
+   ```
+3. Set `video_base_dir` in your commands to point to the `train` directory (e.g., `path/to/EgoLife/train`)
 
+#### QA Annotations
+1. Download the QA JSON file from: https://huggingface.co/datasets/lmms-lab/EgoLife/tree/main
+2. When running the pipeline, set the `query_json` parameter to point to your downloaded QA file (e.g., `path/to/QA.json`)
+
+### Data Format
+
+#### Question Format
+The QA annotations follow this format:
 ```json
 {
     "ID": "1",
@@ -84,6 +102,8 @@ Using OpenAI:
 export OPENAI_API_KEY="your_gpt_api_key"
 ```
 
+## Usage
+
 ### Creating the Database
 
 There are two methods to create a database for querying and answering questions:
@@ -98,7 +118,7 @@ If you have captions for each video, you can gather them into a single JSON file
     "end_time": "11103000",
     "text": "<model caption>",
     "date": "DAY1",
-    "video_path": "Egolife/train/A1_JAKE/DAY1_A1_JAKE_11100000.mp4"
+    "video_path": "EgoLife/train/A1_JAKE/DAY1_A1_JAKE_11100000.mp4"
 }
 ```
 
@@ -116,51 +136,60 @@ In this method, the model will go through all the videos, extract captions, and 
 
 ```bash
 python3 main.py \
-    --name "NAME" \
+    --name "A1_JAKE" \  # Available options: A1_JAKE, A2_ALICE, A3_TASHA, etc.
     --db_name "DB_NAME" \
     --stage create \
-    --video_dir "video_base_dir" \
-    --config "config/your_model_config.yaml"
+    --video_dir "path/to/EgoLife/train" \
+    --config "configs/model_config.yaml"
 ```
 
-### Querying the Database
+### Running the Pipeline
 
-To query the database, use:
-
+#### Query Only
+To query the database:
 ```bash
 python3 main.py \
-    --name "NAME" \
+    --name "A1_JAKE" \
     --db_name "DB_NAME" \
     --stage query \
-    --video_dir "video_base_dir" \
-    --config "config/your_model_config.yaml" \
-    --query_json "path/to/your/query.json"
+    --video_dir "path/to/EgoLife/train" \
+    --config "configs/model_config.yaml" \
+    --query_json "path/to/QA.json"
 ```
 
-### Answering Queries
-
-To process specific query results, use:
-
+#### Answer Only
+To process query results:
 ```bash
 python3 main.py \
-    --name "NAME" \
+    --name "A1_JAKE" \
     --db_name "DB_NAME" \
     --stage answer \
-    --video_dir "video_base_dir" \
-    --config "config/your_model_config.yaml" \
-    --query_json "path/to/your/query.json" \
+    --video_dir "path/to/EgoLife/train" \
+    --config "configs/model_config.yaml" \
+    --query_json "path/to/QA.json" \
     --query_result_json "path/to/query/result.json"
 ```
 
-Alternatively, you can combine querying and answering in one command:
-
+#### Combined Pipeline
+Run query and answer stages together:
 ```bash
 python3 main.py \
-    --name "NAME" \
+    --name "A1_JAKE" \
     --db_name "DB_NAME" \
     --stage query answer \
-    --video_dir "video_base_dir" \
-    --config "config/your_model_config.yaml" \
-    --query_json "path/to/your/query.json"
+    --video_dir "path/to/EgoLife/train" \
+    --config "configs/model_config.yaml" \
+    --query_json "path/to/QA.json"
+```
+
+Run all stages (create, query, and answer) at once:
+```bash
+python3 main.py \
+    --name "A1_JAKE" \
+    --db_name "DB_NAME" \
+    --stage create query answer \
+    --video_dir "path/to/EgoLife/train" \
+    --config "configs/model_config.yaml" \
+    --query_json "path/to/QA.json"
 ```
 

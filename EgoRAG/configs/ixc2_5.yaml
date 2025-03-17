@@ -2,14 +2,10 @@
 rag:
   data_type: "clip"       # Type of data processing (e.g., 'clip', 'raw')
 
-video:
-  fps: 1
-  max_frames_num: 32
-
 caption:
   fps: 1
   
 model:
-  name: "InternVideo2"
+  name: "ixc2_5"
   params:
-    pretrained: "OpenGVLab/InternVideo2-Chat-8B"
+    pretrained: "internlm/internlm-xcomposer2d5-7b"

@@ -5,6 +5,6 @@ caption:
   fps: 1
 
 model:
-  name: "LLaVA"
+  name: "llava"
   params:
     pretrained: "lmms-lab/llava-onevision-qwen2-7b-ov"

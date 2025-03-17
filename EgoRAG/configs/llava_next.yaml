@@ -1,15 +1,10 @@
-# RAG Settings
 rag:
   data_type: "clip"       # Type of data processing (e.g., 'clip', 'raw')
 
-video:
-  fps: 1
-  max_frames_num: 32
-
 caption:
   fps: 1
-  
+
 model:
-  name: "Oryx"
+  name: "llava"
   params:
-    pretrained: "THUdyh/Oryx-1.5-7B"
+    pretrained: "lmms-lab/LLaVA-NeXT-Video-7B"

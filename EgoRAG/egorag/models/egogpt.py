@@ -32,7 +32,6 @@ import whisper
 from decord import VideoReader, cpu
 from egorag.models.base import BaseQueryModel
 from egorag.utils.util import time_to_frame_idx
-from moviepy.editor import VideoFileClip
 from PIL import Image
 from scipy.signal import resample
 

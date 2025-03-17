@@ -1,0 +1,10 @@
+rag:
+  data_type: "clip"       # Type of data processing (e.g., 'clip', 'raw')
+
+caption:
+  fps: 1
+
+model:
+  name: "llava"
+  params:
+    pretrained: "lmms-lab/LLaVA-NeXT-Video-7B"

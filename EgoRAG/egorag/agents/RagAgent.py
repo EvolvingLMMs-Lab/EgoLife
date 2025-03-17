@@ -72,27 +72,23 @@ class RagAgent(ABC):
 
         return accuracy
 
-    def get_video_mapping(self, sorted_video_times, all_times):
+    def get_video_mapping(self, sorted_video_times):
         video_path_mapping = {}
         for day in sorted_video_times.keys():
             date = day
             base_dir = self.video_base_dir
             video_time_list = sorted_video_times[date]
-            all_time_list = all_times[date]
-            for i in range(len(all_time_list) - 1):
-                start_time = all_time_list[i]
-                end_time = all_time_list[i + 1]
 
-                for j in range(len(video_time_list) - 1):
-                    if video_time_list[j] <= start_time < video_time_list[j + 1]:
-                        video_path = os.path.join(
+            for i in range(len(video_time_list) - 1):
+                start_time = video_time_list[i]
+                end_time = video_time_list[i + 1]
+                video_path = os.path.join(
                             base_dir,
                             f"{date}",
-                            f"{date}_{self.name}_{video_time_list[j]}.mp4",
+                            f"{date}_{self.name}_{video_time_list[i]}.mp4",
                         )
-                        break
-                else:
-                    video_path = None
+                      
+    
 
                 video_path_mapping[f"{date}-{start_time}-{end_time}"] = video_path
         return video_path_mapping
@@ -106,28 +102,17 @@ class RagAgent(ABC):
         video_start_time = sample["video_start_time"]
 
         try:
-            import signal
-
-            def timeout_handler(signum, frame):
-                raise TimeoutError("Inference took too long")
-
-            signal.signal(signal.SIGALRM, timeout_handler)
-            signal.alarm(180)
-
             caption = self.model.inference_video(
-                video_path, video_start_time, start_time, end_time, human_query
+                video_path, video_start_time, start_time, end_time, human_query=human_query, system_message=system_message
             )
-            signal.alarm(0)
+            
+                
             print(caption)
-        except TimeoutError as te:
-            print(f"Timeout error in captioning: {te}")
-            return None
+            
         except Exception as e:
             print(f"Error in captioning: {e}")
             return None
 
-        if caption is None or caption == "" or caption == "Error in captioning":
-            return None
 
         sentences = [
             sentence.strip() + "."
@@ -166,10 +151,9 @@ class RagAgent(ABC):
         ]
 
 
-    def create_database_from_query(
+    def create_database_from_video(
         self,
         video_paths,
-        query_json,
         human_query,
         caption_args,
         system_message=None,
@@ -185,23 +169,10 @@ class RagAgent(ABC):
         ]
 
         sorted_video_time = sorted(video_time, key=lambda x: (x["date"], x["time"]))
-        query_time = []
-        seen_times = set()
-        for data in query_json:
-            date = data["query_time"]["date"]
-            time = data["query_time"]["time"]
-            if (date, time) not in seen_times:
-                query_time.append({"date": date, "time": time})
-                seen_times.add((date, time))
-        sorted_query_time = sorted(query_time, key=lambda x: (x["date"], x["time"]))
-
-        all_times = sorted(
-            sorted_video_time + sorted_query_time, key=lambda x: (x["date"], x["time"])
-        )
 
         sorted_video_time = transform_timedict(sorted_video_time)
-        all_times = transform_timedict(all_times)
-        video_mapping = self.get_video_mapping(sorted_video_time, all_times)
+        
+        video_mapping = self.get_video_mapping(sorted_video_time)
         samples = parse_video_map(video_mapping)
 
         if rag in ["rag_CLIP_t"]:
@@ -214,10 +185,13 @@ class RagAgent(ABC):
                 if video_id in existing_video_ids:
                     print(f"Already in database: {video_id}, skip.")
                     continue
-
-                self.add_to_db_t(
-                    video_id, sample, caption_args, human_query, system_message
-                )
+                try:
+                    self.add_to_db_t(
+                        video_id, sample, caption_args, human_query, system_message
+                    )
+                except Exception as e:
+                    print(f"Error in adding to database: {e}")
+                    continue
 
     def create_database_from_json(self, json_path):
         with open(json_path, "r", encoding="utf-8") as f:

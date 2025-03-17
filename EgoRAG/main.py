@@ -23,8 +23,6 @@ def main(args):
     if not os.path.exists(args.config):
         raise FileNotFoundError(f"Config file not found: {args.config}")
         
-    if not os.path.exists(args.query_json):
-        raise FileNotFoundError(f"Query JSON file not found: {args.query_json}")
 
     # Load configuration
     try:
@@ -38,19 +36,6 @@ def main(args):
     RUN_TIME = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     # Extract query_json_name after verifying file exists
-    query_json_name = os.path.splitext(os.path.basename(args.query_json))[0]
-    
-    # Load query data
-    try:
-        with open(args.query_json, "r", encoding="utf-8") as json_file:
-            query_data = json.load(json_file)
-    except json.JSONDecodeError as e:
-        raise ValueError(f"Invalid JSON format in query file: {e}")
-    except Exception as e:
-        raise Exception(f"Error reading query file: {e}")
-        
-    print(f"Processing query file: {args.query_json}")
-    print(f"Query name: {query_json_name}")
 
     if DATE == "all":
         video_list = []
@@ -79,9 +64,8 @@ def main(args):
     if "create" in args.stage:
         print("create stage")
         caption_args = config["caption"]
-        rag_agent.create_database_from_query(
+        rag_agent.create_database_from_video(
             video_paths=video_list,
-            query_json=query_data,
             caption_args=caption_args,
             human_query="Imagine you are the character in the video, describing from a first-person perspective what you saw, and everything that happened over time. Use I as the subject.",
             system_message="You are an egocentric agent. Take yourself as the main character of the video.",
@@ -89,6 +73,21 @@ def main(args):
         )
         gen_event(DB_NAME, args.diary_dir)
     if "query" in args.stage:
+        if not os.path.exists(args.query_json):
+            raise FileNotFoundError(f"Query JSON file not found: {args.query_json}")
+        query_json_name = os.path.splitext(os.path.basename(args.query_json))[0]
+    
+        # Load query data
+        try:
+            with open(args.query_json, "r", encoding="utf-8") as json_file:
+                query_data = json.load(json_file)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Invalid JSON format in query file: {e}")
+        except Exception as e:
+            raise Exception(f"Error reading query file: {e}")
+            
+        print(f"Processing query file: {args.query_json}")
+        print(f"Query name: {query_json_name}")
         print("query stage")
         # Generate filename with current time and db_name
         output_dir = args.query_output_dir
