@@ -21,7 +21,7 @@ This will install the package in editable mode, allowing you to make changes to 
 ### Downloading the Dataset
 
 #### Video Files
-1. Access the video files at: https://huggingface.co/datasets/lmms-lab/EgoLife/tree/main
+1. Access the video files at: [EgoLife Dataset](https://huggingface.co/datasets/lmms-lab/EgoLife/tree/main)
 2. Download and organize the videos in the following structure:
    ```
    path/to/EgoLife/
@@ -34,7 +34,7 @@ This will install the package in editable mode, allowing you to make changes to 
 3. Set `video_base_dir` in your commands to point to the `train` directory (e.g., `path/to/EgoLife/train`)
 
 #### QA Annotations
-1. Download the QA JSON file from: https://huggingface.co/datasets/lmms-lab/EgoLife/tree/main
+1. Download the QA JSON file from: [EgoLife Dataset](https://huggingface.co/datasets/lmms-lab/EgoLife/tree/main)
 2. When running the pipeline, set the `query_json` parameter to point to your downloaded QA file (e.g., `path/to/QA.json`)
 
 ### Data Format
